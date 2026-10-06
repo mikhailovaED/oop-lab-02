@@ -1,5 +1,6 @@
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 
@@ -49,7 +50,8 @@ class MyClass {
 
 public class Main {
 
-  private static Object createParameter(Class<?> type) {
+  private static Object createParameter(Class<?> type)
+          throws ReflectiveOperationException {
 
     if (type == String.class) {
       return "Hello";
@@ -87,46 +89,63 @@ public class Main {
       return 'A';
     }
 
+    // Для остальных ссылочных типов пытаемся создать объект через конструктор без параметров
+    if (!type.isInterface() && !Modifier.isAbstract(type.getModifiers())) {
+
+      Constructor<?> constructor = type.getDeclaredConstructor();
+      constructor.setAccessible(true);
+
+      return constructor.newInstance();
+    }
+
+    // Специальный случай: экземпляр интерфейса или абстрактного класса
     return null;
   }
 
-  public static void main(String[] args) throws Exception {
+  public static void main(String[] args) {
 
-    MyClass object = new MyClass();
+    try {
+      MyClass object = new MyClass();
 
-    Method[] methods = MyClass.class.getDeclaredMethods();
+      Method[] methods = MyClass.class.getDeclaredMethods();
 
-    for (Method method : methods) {
+      for (Method method : methods) {
 
-      if (!method.isAnnotationPresent(Repeat.class)) {
-        continue;
+        if (!method.isAnnotationPresent(Repeat.class)) {
+          continue;
+        }
+
+        // Проверяем, что метод protected или private
+        int modifiers = method.getModifiers();
+
+        if (!Modifier.isProtected(modifiers)
+                && !Modifier.isPrivate(modifiers)) {
+          continue;
+        }
+
+        Repeat repeat = method.getAnnotation(Repeat.class);
+        int count = repeat.value();
+
+        Class<?>[] types = method.getParameterTypes();
+
+        Object[] parameters = new Object[types.length];
+
+        for (int i = 0; i < types.length; i++) {
+          parameters[i] = createParameter(types[i]);
+        }
+
+        method.setAccessible(true);
+
+        for (int i = 0; i < count; i++) {
+          method.invoke(object, parameters);
+        }
       }
 
-      // Проверяем, что метод protected или private
-      int modifiers = method.getModifiers();
+    } catch (ReflectiveOperationException e) {
+      System.out.println("Ошибка при работе с reflection: " + e.getMessage());
 
-      if (!Modifier.isProtected(modifiers)
-              && !Modifier.isPrivate(modifiers)) {
-        continue;
-      }
-
-      Repeat repeat = method.getAnnotation(Repeat.class);
-      int count = repeat.value();
-
-      Class<?>[] types = method.getParameterTypes();
-
-      Object[] parameters = new Object[types.length];
-
-      for (int i = 0; i < types.length; i++) {
-        parameters[i] = createParameter(types[i]);
-      }
-
-      method.setAccessible(true);
-
-      for (int i = 0; i < count; i++) {
-        method.invoke(object, parameters);
-      }
+    } catch (Exception e) {
+      System.out.println("Ошибка: " + e.getMessage());
     }
   }
 }
-
