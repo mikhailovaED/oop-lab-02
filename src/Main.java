@@ -9,6 +9,21 @@ import java.lang.reflect.Modifier;
   int value();
 }
 
+class MethodArgument {
+  private final String text;
+  private final int number;
+
+  private MethodArgument(String text, int number) {
+    this.text = text;
+    this.number = number;
+  }
+
+  @Override
+  public String toString() {
+    return text + ", " + number;
+  }
+}
+
 class MyClass {
 
   public void publicMethod1() {
@@ -20,8 +35,8 @@ class MyClass {
   }
 
   @Repeat(3)
-  protected void protectedMethod1() {
-    System.out.println("Protected method 1");
+  protected void protectedMethod1(MethodArgument methodArgument) {
+    System.out.println("Protected method 1: " + methodArgument);
   }
 
   @Repeat(2)
@@ -89,17 +104,26 @@ public class Main {
       return 'A';
     }
 
-    // Для остальных ссылочных типов пытаемся создать объект через конструктор без параметров
     if (!type.isInterface() && !Modifier.isAbstract(type.getModifiers())) {
-
-      Constructor<?> constructor = type.getDeclaredConstructor();
-      constructor.setAccessible(true);
-
-      return constructor.newInstance();
+      Constructor<?>[] constructors = type.getDeclaredConstructors();
+      for (Constructor<?> constructor : constructors) {
+        constructor.setAccessible(true);
+        var parameters = createParameters(constructor.getParameterTypes());
+        return constructor.newInstance(parameters);
+      }
     }
 
     // Специальный случай: экземпляр интерфейса или абстрактного класса
     return null;
+  }
+
+  private static Object[] createParameters(Class<?>[] types)
+          throws ReflectiveOperationException {
+    Object[] parameters = new Object[types.length];
+    for (int i = 0; i < types.length; i++) {
+      parameters[i] = createParameter(types[i]);
+    }
+    return parameters;
   }
 
   public static void main(String[] args) {
